@@ -4,7 +4,12 @@
 module fortbite_io_m
     use fortbite_precision_m, only: get_precision_info, precision_info_t
     use iso_fortran_env, only: real32, real64, real128
-    use fortbite_types_m, only: value_t, variable_t, print_value
+    use fortbite_types_m, only: value_t, variable_t, print_value, token_t
+    use fortbite_lexer_m, only: tokenize, free_tokens
+    use fortbite_parser_m, only: parse_expression, parse_error_t
+    use fortbite_ast_m, only: ast_node_t, free_ast
+    use fortbite_evaluator_m, only: evaluate_expression, evaluation_context_t, evaluation_error_t, &
+                                   create_context, destroy_context
     implicit none
     private
     
@@ -54,7 +59,7 @@ contains
         write(*, '(A)') ''
     end subroutine print_help
     
-    !> Check if input is a command (starts with a letter)
+    !> Check if input is a command
     logical function is_command(input)
         character(len=*), intent(in) :: input
         character(len=len_trim(input)) :: trimmed_input
@@ -66,14 +71,15 @@ contains
             return
         end if
         
-        ! Check if it starts with a letter (command) or digit/operator (expression)
-        is_command = (trimmed_input(1:1) >= 'a' .and. trimmed_input(1:1) <= 'z') .or. &
-                     (trimmed_input(1:1) >= 'A' .and. trimmed_input(1:1) <= 'Z')
+        ! Check for known commands
+        is_command = (trimmed_input == 'help' .or. trimmed_input == 'h' .or. trimmed_input == '?' .or. &
+                      trimmed_input == 'exit' .or. trimmed_input == 'quit' .or. trimmed_input == 'q' .or. &
+                      trimmed_input == 'clear' .or. trimmed_input == 'cls' .or. &
+                      trimmed_input == 'precision' .or. trimmed_input == 'info' .or. &
+                      trimmed_input == 'vars' .or. trimmed_input == 'variables' .or. &
+                      index(trimmed_input, 'precision ') == 1)
         
-        ! Special case: check for assignment (contains :=)
-        if (index(trimmed_input, ':=') > 0) then
-            is_command = .false.
-        end if
+        ! Everything else is treated as a mathematical expression
     end function is_command
     
     !> Parse and execute a command
@@ -130,10 +136,12 @@ contains
     subroutine repl_loop()
         character(len=MAX_LINE_LENGTH) :: input
         type(variable_t), pointer :: variables => null()
+        type(evaluation_context_t) :: context
         logical :: continue_loop
         integer :: ios
         
         call print_banner()
+        context = create_context()
         continue_loop = .true.
         
         do while (continue_loop)
@@ -153,15 +161,53 @@ contains
             if (is_command(input)) then
                 continue_loop = parse_command(input, variables)
             else
-                ! Handle mathematical expression (placeholder for now)
-                write(*, '(A)') 'Mathematical expression parsing not yet implemented.'
-                write(*, '(A,A,A)') 'You entered: "', trim(input), '"'
+                ! Handle mathematical expression
+                call evaluate_math_expression(trim(input), context)
             end if
         end do
         
-        ! Clean up variables
+        ! Clean up
+        call destroy_context(context)
         call cleanup_variables(variables)
     end subroutine repl_loop
+    
+    !> Evaluate a mathematical expression
+    subroutine evaluate_math_expression(expression, context)
+        character(len=*), intent(in) :: expression
+        type(evaluation_context_t), intent(inout) :: context
+        
+        type(token_t), allocatable :: tokens(:)
+        type(ast_node_t), pointer :: ast_root => null()
+        type(parse_error_t) :: parse_err
+        type(evaluation_error_t) :: eval_err
+        type(value_t) :: result
+        
+        ! Tokenize the expression
+        tokens = tokenize(expression)
+        
+        ! Parse into AST
+        ast_root => parse_expression(tokens, parse_err)
+        
+        if (parse_err%has_error) then
+            write(*, '(A,A)') 'Parse error: ', trim(parse_err%message)
+        else if (associated(ast_root)) then
+            ! Evaluate the expression
+            result = evaluate_expression(ast_root, context, eval_err)
+            
+            if (eval_err%has_error) then
+                write(*, '(A,A)') 'Evaluation error: ', trim(eval_err%message)
+            else
+                ! Print the result
+                call print_value(result)
+            end if
+        else
+            write(*, '(A)') 'Failed to parse expression.'
+        end if
+        
+        ! Clean up
+        if (associated(ast_root)) call free_ast(ast_root)
+        call free_tokens(tokens)
+    end subroutine evaluate_math_expression
     
     !> Convert string to lowercase
     subroutine to_lowercase(str)
