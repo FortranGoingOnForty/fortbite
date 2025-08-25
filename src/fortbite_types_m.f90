@@ -20,6 +20,8 @@ module fortbite_types_m
     
     ! Public procedures
     public :: create_scalar, create_complex, create_matrix
+    public :: create_zeros_matrix, create_ones_matrix, create_eye_matrix, create_diag_matrix
+    public :: create_complex_matrix
     public :: destroy_value, copy_value, print_value
     public :: is_zero, is_real, get_real_part, get_imag_part
     
@@ -129,6 +131,110 @@ contains
         allocate(value%matrix_val(value%rows, value%cols))
         value%matrix_val = matrix_data
     end function create_matrix
+    
+    !> Create a complex matrix value
+    function create_complex_matrix(matrix_data, precision_kind) result(value)
+        complex(real64), intent(in) :: matrix_data(:,:)
+        integer, intent(in), optional :: precision_kind
+        type(value_t) :: value
+        
+        value%value_type = VALUE_MATRIX
+        value%precision_kind = real64
+        if (present(precision_kind)) value%precision_kind = precision_kind
+        
+        value%rows = size(matrix_data, 1)
+        value%cols = size(matrix_data, 2)
+        value%is_complex_matrix = .true.
+        
+        allocate(value%complex_matrix_val(value%rows, value%cols))
+        value%complex_matrix_val = matrix_data
+    end function create_complex_matrix
+    
+    !> Create a zeros matrix
+    function create_zeros_matrix(rows, cols, precision_kind) result(value)
+        integer, intent(in) :: rows, cols
+        integer, intent(in), optional :: precision_kind
+        type(value_t) :: value
+        
+        value%value_type = VALUE_MATRIX
+        value%precision_kind = real64
+        if (present(precision_kind)) value%precision_kind = precision_kind
+        
+        value%rows = rows
+        value%cols = cols
+        value%is_complex_matrix = .false.
+        
+        allocate(value%matrix_val(rows, cols))
+        value%matrix_val = 0.0_real64
+    end function create_zeros_matrix
+    
+    !> Create a ones matrix
+    function create_ones_matrix(rows, cols, precision_kind) result(value)
+        integer, intent(in) :: rows, cols
+        integer, intent(in), optional :: precision_kind
+        type(value_t) :: value
+        
+        value%value_type = VALUE_MATRIX
+        value%precision_kind = real64
+        if (present(precision_kind)) value%precision_kind = precision_kind
+        
+        value%rows = rows
+        value%cols = cols
+        value%is_complex_matrix = .false.
+        
+        allocate(value%matrix_val(rows, cols))
+        value%matrix_val = 1.0_real64
+    end function create_ones_matrix
+    
+    !> Create an identity matrix
+    function create_eye_matrix(size, precision_kind) result(value)
+        integer, intent(in) :: size
+        integer, intent(in), optional :: precision_kind
+        type(value_t) :: value
+        integer :: i
+        
+        value%value_type = VALUE_MATRIX
+        value%precision_kind = real64
+        if (present(precision_kind)) value%precision_kind = precision_kind
+        
+        value%rows = size
+        value%cols = size
+        value%is_complex_matrix = .false.
+        
+        allocate(value%matrix_val(size, size))
+        value%matrix_val = 0.0_real64
+        
+        ! Set diagonal elements to 1
+        do i = 1, size
+            value%matrix_val(i, i) = 1.0_real64
+        end do
+    end function create_eye_matrix
+    
+    !> Create a diagonal matrix from a vector
+    function create_diag_matrix(diagonal_elements, precision_kind) result(value)
+        real(real64), intent(in) :: diagonal_elements(:)
+        integer, intent(in), optional :: precision_kind
+        type(value_t) :: value
+        integer :: i, n
+        
+        n = size(diagonal_elements)
+        
+        value%value_type = VALUE_MATRIX
+        value%precision_kind = real64
+        if (present(precision_kind)) value%precision_kind = precision_kind
+        
+        value%rows = n
+        value%cols = n
+        value%is_complex_matrix = .false.
+        
+        allocate(value%matrix_val(n, n))
+        value%matrix_val = 0.0_real64
+        
+        ! Set diagonal elements
+        do i = 1, n
+            value%matrix_val(i, i) = diagonal_elements(i)
+        end do
+    end function create_diag_matrix
     
     !> Destroy/deallocate a value
     subroutine destroy_value(value)

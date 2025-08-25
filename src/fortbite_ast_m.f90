@@ -10,12 +10,12 @@ module fortbite_ast_m
     
     public :: ast_node_t, ast_node_type_enum, operator_type_enum, ast_node_ptr_t
     public :: AST_LITERAL, AST_IDENTIFIER, AST_BINARY_OP, AST_UNARY_OP
-    public :: AST_FUNCTION_CALL, AST_ASSIGNMENT, AST_PRECISION_SPEC
+    public :: AST_FUNCTION_CALL, AST_ASSIGNMENT, AST_PRECISION_SPEC, AST_MATRIX_LITERAL
     public :: OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_POW, OP_MOD
     public :: OP_UNARY_PLUS, OP_UNARY_MINUS
     public :: create_literal_node, create_identifier_node, create_binary_node
     public :: create_unary_node, create_function_node, create_assignment_node
-    public :: create_precision_node, free_ast, print_ast
+    public :: create_precision_node, create_matrix_literal_node, free_ast, print_ast
     
     !> AST node types
     enum, bind(c)
@@ -26,6 +26,7 @@ module fortbite_ast_m
         enumerator :: AST_FUNCTION_CALL = 5
         enumerator :: AST_ASSIGNMENT = 6
         enumerator :: AST_PRECISION_SPEC = 7
+        enumerator :: AST_MATRIX_LITERAL = 8
     end enum
     integer, parameter :: ast_node_type_enum = kind(AST_LITERAL)
     
@@ -67,6 +68,10 @@ module fortbite_ast_m
         ! Function arguments (array of pointer wrappers)
         type(ast_node_ptr_t), allocatable :: arguments(:)
         integer :: arg_count = 0
+        
+        ! Matrix literal data
+        real(real64), allocatable :: matrix_elements(:,:)
+        integer :: matrix_rows = 0, matrix_cols = 0
     end type ast_node_t
     
 contains
@@ -168,6 +173,21 @@ contains
         node%expression => expr_node
     end function create_precision_node
     
+    !> Create a matrix literal node
+    function create_matrix_literal_node(elements, rows, cols) result(node)
+        real(real64), intent(in) :: elements(:,:)
+        integer, intent(in) :: rows, cols
+        type(ast_node_t), pointer :: node
+        
+        allocate(node)
+        node%node_type = AST_MATRIX_LITERAL
+        node%matrix_rows = rows
+        node%matrix_cols = cols
+        
+        allocate(node%matrix_elements(rows, cols))
+        node%matrix_elements = elements
+    end function create_matrix_literal_node
+    
     !> Free AST and all child nodes
     recursive subroutine free_ast(node)
         type(ast_node_t), pointer, intent(inout) :: node
@@ -189,6 +209,11 @@ contains
                 end if
             end do
             deallocate(node%arguments)
+        end if
+        
+        ! Free matrix literal data
+        if (allocated(node%matrix_elements)) then
+            deallocate(node%matrix_elements)
         end if
         
         ! Free the node itself
@@ -244,6 +269,10 @@ contains
         case (AST_PRECISION_SPEC)
             write(*, '(A,A,I0)') trim(spaces), 'PRECISION: ', node%precision_digits
             call print_ast(node%expression, ind + 2)
+            
+        case (AST_MATRIX_LITERAL)
+            write(*, '(A,A,I0,A,I0,A)') trim(spaces), 'MATRIX_LITERAL: [', &
+                node%matrix_rows, 'x', node%matrix_cols, ']'
             
         case default
             write(*, '(A,A)') trim(spaces), 'UNKNOWN NODE'

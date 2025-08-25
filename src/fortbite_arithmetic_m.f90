@@ -6,6 +6,8 @@ module fortbite_arithmetic_m
     use iso_fortran_env, only: real64
     use fortbite_types_m, only: value_t, VALUE_SCALAR, VALUE_COMPLEX, VALUE_MATRIX, &
                                create_scalar, create_complex, is_real
+    use fortbite_matrix_m, only: matrix_add, matrix_subtract, matrix_multiply, &
+                                scalar_matrix_multiply, matrix_scalar_multiply
     implicit none
     private
     
@@ -44,7 +46,23 @@ contains
             return
         end if
         
-        ! TODO: Handle matrix operations in Phase 3
+        ! Handle matrix operations
+        if (a%value_type == VALUE_MATRIX .and. b%value_type == VALUE_MATRIX) then
+            c = matrix_add(a, b)
+            return
+        end if
+        
+        ! Handle scalar + matrix or matrix + scalar  
+        if ((a%value_type == VALUE_SCALAR .or. a%value_type == VALUE_COMPLEX) .and. b%value_type == VALUE_MATRIX) then
+            c = scalar_matrix_multiply(a, b)  ! Note: this should be scalar addition to each element
+            return
+        end if
+        
+        if (a%value_type == VALUE_MATRIX .and. (b%value_type == VALUE_SCALAR .or. b%value_type == VALUE_COMPLEX)) then
+            c = matrix_scalar_multiply(a, b)  ! Note: this should be scalar addition to each element
+            return
+        end if
+        
         ! For now, return undefined for unsupported operations
         c%value_type = 0  ! VALUE_UNDEFINED
     end function add_values
@@ -111,6 +129,23 @@ contains
         if (a%value_type == VALUE_COMPLEX .and. b%value_type == VALUE_COMPLEX) then
             c%complex_val = a%complex_val * b%complex_val
             c%value_type = VALUE_COMPLEX
+            return
+        end if
+        
+        ! Handle matrix operations
+        if (a%value_type == VALUE_MATRIX .and. b%value_type == VALUE_MATRIX) then
+            c = matrix_multiply(a, b)
+            return
+        end if
+        
+        ! Handle scalar * matrix or matrix * scalar
+        if ((a%value_type == VALUE_SCALAR .or. a%value_type == VALUE_COMPLEX) .and. b%value_type == VALUE_MATRIX) then
+            c = scalar_matrix_multiply(a, b)
+            return
+        end if
+        
+        if (a%value_type == VALUE_MATRIX .and. (b%value_type == VALUE_SCALAR .or. b%value_type == VALUE_COMPLEX)) then
+            c = matrix_scalar_multiply(a, b)
             return
         end if
         

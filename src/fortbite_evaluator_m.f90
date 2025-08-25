@@ -3,14 +3,17 @@
 !> Evaluates Abstract Syntax Trees, performing mathematical operations
 !> with proper type promotion and precision handling.
 module fortbite_evaluator_m
-    use fortbite_types_m, only: value_t, variable_t, VALUE_SCALAR, VALUE_COMPLEX, &
-                               create_scalar, create_complex, print_value, is_zero, is_real
+    use fortbite_types_m, only: value_t, variable_t, VALUE_SCALAR, VALUE_COMPLEX, VALUE_MATRIX, &
+                               create_scalar, create_complex, create_matrix, print_value, is_zero, is_real, &
+                               create_zeros_matrix, create_ones_matrix, create_eye_matrix
     use fortbite_ast_m, only: ast_node_t, ast_node_ptr_t, AST_LITERAL, AST_IDENTIFIER, AST_BINARY_OP, &
-                             AST_UNARY_OP, AST_FUNCTION_CALL, AST_ASSIGNMENT, AST_PRECISION_SPEC, &
+                             AST_UNARY_OP, AST_FUNCTION_CALL, AST_ASSIGNMENT, AST_PRECISION_SPEC, AST_MATRIX_LITERAL, &
                              OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_POW, OP_MOD, &
                              OP_UNARY_PLUS, OP_UNARY_MINUS
     use fortbite_arithmetic_m, only: add_values, subtract_values, multiply_values, &
                                     divide_values, power_values, negate_value, abs_value
+    use fortbite_matrix_m, only: matrix_transpose, matrix_determinant, matrix_inverse, &
+                                matrix_element_access, matrix_solve, matrix_rank, matrix_trace
     use iso_fortran_env, only: real64
     implicit none
     private
@@ -136,6 +139,9 @@ contains
         case (AST_PRECISION_SPEC)
             value = evaluate_precision_spec(node, context, local_error)
             
+        case (AST_MATRIX_LITERAL)
+            value = evaluate_matrix_literal(node, local_error)
+            
         case default
             call set_eval_error(local_error, 'Unknown AST node type')
             value = create_scalar(0.0_real64)
@@ -174,6 +180,25 @@ contains
             return
         else if (node%identifier == 'i') then
             value = create_complex(0.0_real64, 1.0_real64)  ! Imaginary unit
+            return
+        end if
+        
+        ! Check for matrix creation shortcuts
+        if (node%identifier == 'zeros2') then
+            value = create_zeros_matrix(2, 2)
+            return
+        else if (node%identifier == 'ones2') then
+            value = create_ones_matrix(2, 2)
+            return
+        else if (node%identifier == 'ones3') then
+            value = create_ones_matrix(3, 3)
+            return
+        else if (node%identifier == 'eye2') then
+            value = create_eye_matrix(2)
+            return
+        else if (node%identifier == 'testmat') then
+            ! Create a test matrix [[1,2],[3,4]]
+            value = create_matrix(reshape([1.0_real64, 3.0_real64, 2.0_real64, 4.0_real64], [2, 2]))
             return
         end if
         
@@ -394,6 +419,163 @@ contains
             end if
             value = abs_value(args(1))
             
+        ! Matrix creation functions
+        case ('zeros')
+            if (node%arg_count == 1) then
+                ! zeros(n) - square matrix
+                if (args(1)%value_type == VALUE_SCALAR) then
+                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val)) then
+                        value = create_zeros_matrix(int(args(1)%scalar_val), int(args(1)%scalar_val))
+                    else
+                        call set_eval_error(error, 'zeros() size must be a positive integer')
+                        value = create_scalar(0.0_real64)
+                    end if
+                else
+                    call set_eval_error(error, 'zeros() expects numeric size argument')
+                    value = create_scalar(0.0_real64)
+                end if
+            else if (node%arg_count == 2) then
+                ! zeros(m,n) - rectangular matrix
+                if (args(1)%value_type == VALUE_SCALAR .and. args(2)%value_type == VALUE_SCALAR) then
+                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val) .and. &
+                        args(2)%scalar_val > 0 .and. args(2)%scalar_val == int(args(2)%scalar_val)) then
+                        value = create_zeros_matrix(int(args(1)%scalar_val), int(args(2)%scalar_val))
+                    else
+                        call set_eval_error(error, 'zeros() sizes must be positive integers')
+                        value = create_scalar(0.0_real64)
+                    end if
+                else
+                    call set_eval_error(error, 'zeros() expects numeric size arguments')
+                    value = create_scalar(0.0_real64)
+                end if
+            else
+                call set_eval_error(error, 'zeros() expects 1 or 2 arguments')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('ones')
+            if (node%arg_count == 1) then
+                ! ones(n) - square matrix
+                if (args(1)%value_type == VALUE_SCALAR) then
+                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val)) then
+                        value = create_ones_matrix(int(args(1)%scalar_val), int(args(1)%scalar_val))
+                    else
+                        call set_eval_error(error, 'ones() size must be a positive integer')
+                        value = create_scalar(0.0_real64)
+                    end if
+                else
+                    call set_eval_error(error, 'ones() expects numeric size argument')
+                    value = create_scalar(0.0_real64)
+                end if
+            else if (node%arg_count == 2) then
+                ! ones(m,n) - rectangular matrix
+                if (args(1)%value_type == VALUE_SCALAR .and. args(2)%value_type == VALUE_SCALAR) then
+                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val) .and. &
+                        args(2)%scalar_val > 0 .and. args(2)%scalar_val == int(args(2)%scalar_val)) then
+                        value = create_ones_matrix(int(args(1)%scalar_val), int(args(2)%scalar_val))
+                    else
+                        call set_eval_error(error, 'ones() sizes must be positive integers')
+                        value = create_scalar(0.0_real64)
+                    end if
+                else
+                    call set_eval_error(error, 'ones() expects numeric size arguments')
+                    value = create_scalar(0.0_real64)
+                end if
+            else
+                call set_eval_error(error, 'ones() expects 1 or 2 arguments')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('eye')
+            if (node%arg_count /= 1) then
+                call set_eval_error(error, 'eye() expects 1 argument')
+                value = create_scalar(0.0_real64)
+                return
+            end if
+            if (args(1)%value_type == VALUE_SCALAR) then
+                if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val)) then
+                    value = create_eye_matrix(int(args(1)%scalar_val))
+                else
+                    call set_eval_error(error, 'eye() size must be a positive integer')
+                    value = create_scalar(0.0_real64)
+                end if
+            else
+                call set_eval_error(error, 'eye() expects numeric size argument')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        ! Matrix functions
+        case ('transpose', 'trans')
+            if (node%arg_count /= 1) then
+                call set_eval_error(error, 'transpose() expects 1 argument')
+                value = create_scalar(0.0_real64)
+                return
+            end if
+            if (args(1)%value_type == VALUE_MATRIX) then
+                value = matrix_transpose(args(1))
+            else
+                call set_eval_error(error, 'transpose() expects a matrix argument')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('det', 'determinant')
+            if (node%arg_count /= 1) then
+                call set_eval_error(error, 'det() expects 1 argument')
+                value = create_scalar(0.0_real64)
+                return
+            end if
+            if (args(1)%value_type == VALUE_MATRIX) then
+                value = create_scalar(matrix_determinant(args(1)))
+            else
+                call set_eval_error(error, 'det() expects a matrix argument')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('inv', 'inverse')
+            if (node%arg_count /= 1) then
+                call set_eval_error(error, 'inv() expects 1 argument')
+                value = create_scalar(0.0_real64)
+                return
+            end if
+            if (args(1)%value_type == VALUE_MATRIX) then
+                value = matrix_inverse(args(1))
+            else
+                call set_eval_error(error, 'inv() expects a matrix argument')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('solve')
+            ! Solve linear system Ax = b
+            if (node%arg_count /= 2) then
+                call set_eval_error(error, 'solve() expects 2 arguments: solve(A, b)')
+                value = create_scalar(0.0_real64)
+                return
+            end if
+            if (args(1)%value_type == VALUE_MATRIX .and. args(2)%value_type == VALUE_MATRIX) then
+                value = matrix_solve(args(1), args(2))
+            else
+                call set_eval_error(error, 'solve() expects matrix arguments')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('rank')
+            ! Calculate matrix rank
+            if (args(1)%value_type == VALUE_MATRIX) then
+                value = create_scalar(real(matrix_rank(args(1)), real64))
+            else
+                call set_eval_error(error, 'rank() expects a matrix argument')
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('trace')
+            ! Calculate matrix trace (sum of diagonal elements)
+            if (args(1)%value_type == VALUE_MATRIX) then
+                value = create_scalar(matrix_trace(args(1)))
+            else
+                call set_eval_error(error, 'trace() expects a matrix argument')
+                value = create_scalar(0.0_real64)
+            end if
+            
         case default
             call set_eval_error(error, 'Unknown function: ' // node%function_name)
             value = create_scalar(0.0_real64)
@@ -455,6 +637,22 @@ contains
         ! Could modify precision here based on node%precision_digits
         ! For now, just return the value as-is
     end function evaluate_precision_spec
+    
+    !> Evaluate a matrix literal
+    function evaluate_matrix_literal(node, error) result(value)
+        type(ast_node_t), pointer, intent(in) :: node
+        type(evaluation_error_t), intent(out) :: error
+        type(value_t) :: value
+        
+        error%has_error = .false.
+        
+        if (allocated(node%matrix_elements)) then
+            value = create_matrix(node%matrix_elements)
+        else
+            call set_eval_error(error, 'Invalid matrix literal')
+            value = create_scalar(0.0_real64)
+        end if
+    end function evaluate_matrix_literal
     
     !> Set an evaluation error
     subroutine set_eval_error(error, message)
