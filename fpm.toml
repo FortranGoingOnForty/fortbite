@@ -1,0 +1,40 @@
+name = "fortbite"
+version = "1.0.0"
+license = "MIT"
+author = "espadonne (mfw)"
+maintainer = "espadonne@fortbite.org"
+copyright = "2024 FORTBITE Contributors"
+
+[build]
+auto-executables = true
+auto-tests = true
+auto-examples = false
+
+[fortran]
+implicit-typing = false
+implicit-external = false
+
+[dependencies]
+# Future dependencies for external libraries
+# stdlib = "*"  # Fortran Standard Library (when available)
+
+[dev-dependencies]
+# Test framework dependencies will go here
+
+[[executable]]
+name = "fortbite"
+source-dir = "src"
+main = "fortbite.f90"
+
+[[test]]
+name = "test-precision"
+source-dir = "test"
+main = "test_precision.f90"
+
+[[test]]
+name = "test-types" 
+source-dir = "test"
+main = "test_types.f90"
+
+[install]
+library = false
