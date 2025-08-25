@@ -321,7 +321,51 @@ contains
                     call advance(parser)  ! Skip ')'
                     node => create_function_node(func_name)
                 else
-                    call set_error(parser, 'Function arguments not yet fully implemented')
+                    ! Single argument function - parse one expression  
+                    ! Support numbers and negative numbers
+                    if (parser%current_token%token_type == TOKEN_NUMBER) then
+                        read(parser%current_token%text, *) num_val
+                        value = create_scalar(num_val)
+                        single_arg => create_literal_node(value)
+                        call advance(parser)
+                    else if (parser%current_token%token_type == TOKEN_OPERATOR .and. &
+                             parser%current_token%text == '-') then
+                        ! Handle negative numbers
+                        call advance(parser)  ! Skip minus
+                        if (parser%current_token%token_type == TOKEN_NUMBER) then
+                            read(parser%current_token%text, *) num_val
+                            value = create_scalar(-num_val)  ! Make negative
+                            single_arg => create_literal_node(value)
+                            call advance(parser)
+                        else
+                            call set_error(parser, 'Expected number after minus sign')
+                            return
+                        end if
+                    else
+                        call set_error(parser, 'Function arguments currently support numbers only')
+                        return
+                    end if
+                    
+                    if (.not. associated(single_arg)) then
+                        call set_error(parser, 'Invalid function argument')
+                        return
+                    end if
+                    
+                    if (parser%current_token%token_type == TOKEN_RPAREN) then
+                        ! Single argument - create function with one arg
+                        call advance(parser)  ! Skip ')'
+                        
+                        ! Create function node properly
+                        allocate(node)
+                        node%node_type = AST_FUNCTION_CALL
+                        node%function_name = trim(func_name)
+                        node%arg_count = 1
+                        allocate(node%arguments(1))
+                        node%arguments(1)%ptr => single_arg
+                    else
+                        call set_error(parser, 'Expected closing parenthesis')
+                        if (associated(single_arg)) call free_ast(single_arg)
+                    end if
                 end if
             else
                 ! Variable identifier

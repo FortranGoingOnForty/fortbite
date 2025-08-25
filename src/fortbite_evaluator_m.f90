@@ -14,6 +14,8 @@ module fortbite_evaluator_m
                                     divide_values, power_values, negate_value, abs_value
     use fortbite_matrix_m, only: matrix_transpose, matrix_determinant, matrix_inverse, &
                                 matrix_element_access, matrix_solve, matrix_rank, matrix_trace
+    use fortbite_functions_m, only: eval_trigonometric, eval_hyperbolic, eval_logarithmic, &
+                                   eval_exponential, eval_statistical, eval_special, eval_complex_functions
     use iso_fortran_env, only: real64
     implicit none
     private
@@ -321,76 +323,70 @@ contains
         
         ! Call function
         select case (node%function_name)
-        case ('sin')
+        ! Trigonometric functions
+        case ('sin', 'cos', 'tan', 'asin', 'arcsin', 'acos', 'arccos', 'atan', 'arctan', &
+              'sec', 'csc', 'cot')
             if (node%arg_count /= 1) then
-                call set_eval_error(error, 'sin() expects 1 argument')
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
                 value = create_scalar(0.0_real64)
                 return
             end if
-            if (args(1)%value_type == VALUE_SCALAR) then
-                value = create_scalar(sin(args(1)%scalar_val))
-            else
-                call set_eval_error(error, 'sin() expects a real argument')
-                value = create_scalar(0.0_real64)
-            end if
+            value = eval_trigonometric(node%function_name, args(1))
             
-        case ('cos')
+        ! Hyperbolic functions  
+        case ('sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'sech', 'csch', 'coth')
             if (node%arg_count /= 1) then
-                call set_eval_error(error, 'cos() expects 1 argument')
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
                 value = create_scalar(0.0_real64)
                 return
             end if
-            if (args(1)%value_type == VALUE_SCALAR) then
-                value = create_scalar(cos(args(1)%scalar_val))
-            else
-                call set_eval_error(error, 'cos() expects a real argument')
-                value = create_scalar(0.0_real64)
-            end if
+            value = eval_hyperbolic(node%function_name, args(1))
             
-        case ('tan')
+        ! Logarithmic functions
+        case ('log', 'ln', 'log10', 'lg', 'log2')
             if (node%arg_count /= 1) then
-                call set_eval_error(error, 'tan() expects 1 argument')
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
                 value = create_scalar(0.0_real64)
                 return
             end if
-            if (args(1)%value_type == VALUE_SCALAR) then
-                value = create_scalar(tan(args(1)%scalar_val))
-            else
-                call set_eval_error(error, 'tan() expects a real argument')
-                value = create_scalar(0.0_real64)
-            end if
+            value = eval_logarithmic(node%function_name, args(1))
             
-        case ('log')
+        ! Exponential functions
+        case ('exp', 'exp2', 'exp10', 'expm1')
             if (node%arg_count /= 1) then
-                call set_eval_error(error, 'log() expects 1 argument')
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
                 value = create_scalar(0.0_real64)
                 return
             end if
-            if (args(1)%value_type == VALUE_SCALAR) then
-                x = args(1)%scalar_val
-                if (x > 0.0_real64) then
-                    value = create_scalar(log(x))
-                else
-                    call set_eval_error(error, 'log() argument must be positive')
-                    value = create_scalar(0.0_real64)
-                end if
-            else
-                call set_eval_error(error, 'log() expects a real argument')
-                value = create_scalar(0.0_real64)
-            end if
+            value = eval_exponential(node%function_name, args(1))
             
-        case ('exp')
+        ! Statistical functions
+        case ('mean', 'average', 'sum', 'std', 'stddev')
             if (node%arg_count /= 1) then
-                call set_eval_error(error, 'exp() expects 1 argument')
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
                 value = create_scalar(0.0_real64)
                 return
             end if
-            if (args(1)%value_type == VALUE_SCALAR) then
-                value = create_scalar(exp(args(1)%scalar_val))
-            else
-                call set_eval_error(error, 'exp() expects a real argument')
+            value = eval_statistical(node%function_name, args(1))
+            
+        ! Special functions
+        case ('gamma', 'lgamma', 'loggamma', 'factorial', 'fact', 'erf', 'erfc', &
+              'ceil', 'ceiling', 'floor', 'round', 'nint', 'frac', 'fraction')
+            if (node%arg_count /= 1) then
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
                 value = create_scalar(0.0_real64)
+                return
             end if
+            value = eval_special(node%function_name, args(1))
+            
+        ! Complex functions
+        case ('real', 're', 'imag', 'im', 'conj', 'conjugate', 'arg', 'phase', 'angle', 'cabs', 'modulus')
+            if (node%arg_count /= 1) then
+                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+                value = create_scalar(0.0_real64)
+                return
+            end if
+            value = eval_complex_functions(node%function_name, args(1))
             
         case ('sqrt')
             if (node%arg_count /= 1) then

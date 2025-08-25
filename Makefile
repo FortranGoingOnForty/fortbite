@@ -19,6 +19,8 @@ TARGET = $(BINDIR)/fortbite
 # Source files (order matters for dependencies)
 SOURCES = $(SRCDIR)/fortbite_precision_m.f90 \
           $(SRCDIR)/fortbite_types_m.f90 \
+          $(SRCDIR)/fortbite_matrix_m.f90 \
+          $(SRCDIR)/fortbite_functions_m.f90 \
           $(SRCDIR)/fortbite_arithmetic_m.f90 \
           $(SRCDIR)/fortbite_ast_m.f90 \
           $(SRCDIR)/fortbite_lexer_m.f90 \
@@ -48,11 +50,13 @@ $(BUILDDIR)/%.o: $(SRCDIR)/%.f90
 
 # Dependencies (manually specified for now)
 $(BUILDDIR)/fortbite_types_m.o: $(BUILDDIR)/fortbite_precision_m.o
-$(BUILDDIR)/fortbite_arithmetic_m.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o
+$(BUILDDIR)/fortbite_matrix_m.o: $(BUILDDIR)/fortbite_types_m.o
+$(BUILDDIR)/fortbite_functions_m.o: $(BUILDDIR)/fortbite_types_m.o
+$(BUILDDIR)/fortbite_arithmetic_m.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_matrix_m.o
 $(BUILDDIR)/fortbite_ast_m.o: $(BUILDDIR)/fortbite_types_m.o
 $(BUILDDIR)/fortbite_lexer_m.o: $(BUILDDIR)/fortbite_types_m.o
 $(BUILDDIR)/fortbite_parser_m.o: $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_ast_m.o
-$(BUILDDIR)/fortbite_evaluator_m.o: $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_ast_m.o $(BUILDDIR)/fortbite_arithmetic_m.o
+$(BUILDDIR)/fortbite_evaluator_m.o: $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_ast_m.o $(BUILDDIR)/fortbite_arithmetic_m.o $(BUILDDIR)/fortbite_functions_m.o
 $(BUILDDIR)/fortbite_io_m.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o
 $(BUILDDIR)/fortbite.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_io_m.o
 

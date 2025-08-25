@@ -195,17 +195,30 @@ contains
         
         if (.not. associated(node)) return
         
-        ! Free child nodes
-        if (associated(node%left)) call free_ast(node%left)
-        if (associated(node%right)) call free_ast(node%right)
-        if (associated(node%operand)) call free_ast(node%operand)
-        if (associated(node%expression)) call free_ast(node%expression)
+        ! Free child nodes with nullification to prevent double-freeing
+        if (associated(node%left)) then
+            call free_ast(node%left)
+            nullify(node%left)
+        end if
+        if (associated(node%right)) then
+            call free_ast(node%right)
+            nullify(node%right)
+        end if
+        if (associated(node%operand)) then
+            call free_ast(node%operand)
+            nullify(node%operand)
+        end if
+        if (associated(node%expression)) then
+            call free_ast(node%expression)
+            nullify(node%expression)
+        end if
         
         ! Free function arguments
         if (allocated(node%arguments)) then
             do i = 1, node%arg_count
                 if (associated(node%arguments(i)%ptr)) then
                     call free_ast(node%arguments(i)%ptr)
+                    nullify(node%arguments(i)%ptr)
                 end if
             end do
             deallocate(node%arguments)
