@@ -321,51 +321,9 @@ contains
                     call advance(parser)  ! Skip ')'
                     node => create_function_node(func_name)
                 else
-                    ! Single argument function - parse one expression  
-                    ! Support numbers and negative numbers
-                    if (parser%current_token%token_type == TOKEN_NUMBER) then
-                        read(parser%current_token%text, *) num_val
-                        value = create_scalar(num_val)
-                        single_arg => create_literal_node(value)
-                        call advance(parser)
-                    else if (parser%current_token%token_type == TOKEN_OPERATOR .and. &
-                             parser%current_token%text == '-') then
-                        ! Handle negative numbers
-                        call advance(parser)  ! Skip minus
-                        if (parser%current_token%token_type == TOKEN_NUMBER) then
-                            read(parser%current_token%text, *) num_val
-                            value = create_scalar(-num_val)  ! Make negative
-                            single_arg => create_literal_node(value)
-                            call advance(parser)
-                        else
-                            call set_error(parser, 'Expected number after minus sign')
-                            return
-                        end if
-                    else
-                        call set_error(parser, 'Function arguments currently support numbers only')
-                        return
-                    end if
-                    
-                    if (.not. associated(single_arg)) then
-                        call set_error(parser, 'Invalid function argument')
-                        return
-                    end if
-                    
-                    if (parser%current_token%token_type == TOKEN_RPAREN) then
-                        ! Single argument - create function with one arg
-                        call advance(parser)  ! Skip ')'
-                        
-                        ! Create function node properly
-                        allocate(node)
-                        node%node_type = AST_FUNCTION_CALL
-                        node%function_name = trim(func_name)
-                        node%arg_count = 1
-                        allocate(node%arguments(1))
-                        node%arguments(1)%ptr => single_arg
-                    else
-                        call set_error(parser, 'Expected closing parenthesis')
-                        if (associated(single_arg)) call free_ast(single_arg)
-                    end if
+                    ! Parse arguments (single or multiple)
+                    call parse_function_arguments(parser, func_name, node)
+                    if (parser%has_error) return
                 end if
             else
                 ! Variable identifier
@@ -540,5 +498,110 @@ contains
             call set_error(parser, 'Expected closing bracket for matrix literal')
         end if
     end function parse_matrix_literal
+    
+    !> Parse function arguments (supports single and multiple arguments)
+    subroutine parse_function_arguments(parser, func_name, node)
+        type(parser_state_t), intent(inout) :: parser
+        character(len=*), intent(in) :: func_name
+        type(ast_node_t), pointer, intent(out) :: node
+        
+        type(ast_node_t), pointer :: arg1, arg2, arg3
+        integer :: arg_count
+        
+        arg_count = 0
+        nullify(arg1, arg2, arg3)
+        
+        ! Parse first argument
+        call parse_single_argument(parser, arg1)
+        if (.not. associated(arg1)) then
+            call set_error(parser, 'Invalid function argument')
+            return
+        end if
+        arg_count = 1
+        
+        ! Check for more arguments
+        if (parser%current_token%token_type == TOKEN_COMMA) then
+            call advance(parser)  ! Skip comma
+            call parse_single_argument(parser, arg2)
+            if (.not. associated(arg2)) then
+                call set_error(parser, 'Invalid second argument')
+                if (associated(arg1)) call free_ast(arg1)
+                return
+            end if
+            arg_count = 2
+            
+            ! Check for third argument
+            if (parser%current_token%token_type == TOKEN_COMMA) then
+                call advance(parser)  ! Skip comma
+                call parse_single_argument(parser, arg3)
+                if (.not. associated(arg3)) then
+                    call set_error(parser, 'Invalid third argument')
+                    if (associated(arg1)) call free_ast(arg1)
+                    if (associated(arg2)) call free_ast(arg2)
+                    return
+                end if
+                arg_count = 3
+            end if
+        end if
+        
+        ! Expect closing parenthesis
+        if (parser%current_token%token_type /= TOKEN_RPAREN) then
+            call set_error(parser, 'Expected closing parenthesis')
+            if (associated(arg1)) call free_ast(arg1)
+            if (associated(arg2)) call free_ast(arg2)
+            if (associated(arg3)) call free_ast(arg3)
+            return
+        end if
+        call advance(parser)  ! Skip ')'
+        
+        ! Create function node with arguments
+        allocate(node)
+        node%node_type = AST_FUNCTION_CALL
+        node%function_name = trim(func_name)
+        node%arg_count = arg_count
+        allocate(node%arguments(arg_count))
+        
+        ! Set arguments
+        if (arg_count >= 1) node%arguments(1)%ptr => arg1
+        if (arg_count >= 2) node%arguments(2)%ptr => arg2
+        if (arg_count >= 3) node%arguments(3)%ptr => arg3
+    end subroutine parse_function_arguments
+    
+    !> Parse a single function argument (number, negative number, or constant)
+    subroutine parse_single_argument(parser, arg_node)
+        type(parser_state_t), intent(inout) :: parser
+        type(ast_node_t), pointer, intent(out) :: arg_node
+        
+        real(real64) :: num_val
+        type(value_t) :: value
+        
+        if (parser%current_token%token_type == TOKEN_NUMBER) then
+            read(parser%current_token%text, *) num_val
+            value = create_scalar(num_val)
+            arg_node => create_literal_node(value)
+            call advance(parser)
+        else if (parser%current_token%token_type == TOKEN_OPERATOR .and. &
+                 parser%current_token%text == '-') then
+            ! Handle negative numbers
+            call advance(parser)  ! Skip minus
+            if (parser%current_token%token_type == TOKEN_NUMBER) then
+                read(parser%current_token%text, *) num_val
+                value = create_scalar(-num_val)  ! Make negative
+                arg_node => create_literal_node(value)
+                call advance(parser)
+            else
+                call set_error(parser, 'Expected number after minus sign')
+                nullify(arg_node)
+                return
+            end if
+        else if (parser%current_token%token_type == TOKEN_IDENTIFIER) then
+            ! Handle constants like pi, e
+            arg_node => create_identifier_node(parser%current_token%text)
+            call advance(parser)
+        else
+            call set_error(parser, 'Function arguments support numbers and constants')
+            nullify(arg_node)
+        end if
+    end subroutine parse_single_argument
     
 end module fortbite_parser_m
