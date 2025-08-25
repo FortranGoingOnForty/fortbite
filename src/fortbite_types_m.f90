@@ -35,6 +35,7 @@ module fortbite_types_m
     end enum
     integer, parameter :: value_type_enum = kind(VALUE_UNDEFINED)
     
+    
     !> Enumeration for token types
     enum, bind(c)
         enumerator :: TOKEN_EOF = 0
@@ -150,11 +151,11 @@ contains
         value%complex_matrix_val = matrix_data
     end function create_complex_matrix
     
-    !> Create a zeros matrix
-    function create_zeros_matrix(rows, cols, precision_kind) result(value)
+    !> Internal helper to set up basic matrix properties
+    subroutine setup_matrix_base(value, rows, cols, precision_kind)
+        type(value_t), intent(inout) :: value
         integer, intent(in) :: rows, cols
         integer, intent(in), optional :: precision_kind
-        type(value_t) :: value
         
         value%value_type = VALUE_MATRIX
         value%precision_kind = real64
@@ -165,6 +166,15 @@ contains
         value%is_complex_matrix = .false.
         
         allocate(value%matrix_val(rows, cols))
+    end subroutine setup_matrix_base
+    
+    !> Create a zeros matrix
+    function create_zeros_matrix(rows, cols, precision_kind) result(value)
+        integer, intent(in) :: rows, cols
+        integer, intent(in), optional :: precision_kind
+        type(value_t) :: value
+        
+        call setup_matrix_base(value, rows, cols, precision_kind)
         value%matrix_val = 0.0_real64
     end function create_zeros_matrix
     
@@ -174,15 +184,7 @@ contains
         integer, intent(in), optional :: precision_kind
         type(value_t) :: value
         
-        value%value_type = VALUE_MATRIX
-        value%precision_kind = real64
-        if (present(precision_kind)) value%precision_kind = precision_kind
-        
-        value%rows = rows
-        value%cols = cols
-        value%is_complex_matrix = .false.
-        
-        allocate(value%matrix_val(rows, cols))
+        call setup_matrix_base(value, rows, cols, precision_kind)
         value%matrix_val = 1.0_real64
     end function create_ones_matrix
     
@@ -191,17 +193,10 @@ contains
         integer, intent(in) :: size
         integer, intent(in), optional :: precision_kind
         type(value_t) :: value
+        
         integer :: i
         
-        value%value_type = VALUE_MATRIX
-        value%precision_kind = real64
-        if (present(precision_kind)) value%precision_kind = precision_kind
-        
-        value%rows = size
-        value%cols = size
-        value%is_complex_matrix = .false.
-        
-        allocate(value%matrix_val(size, size))
+        call setup_matrix_base(value, size, size, precision_kind)
         value%matrix_val = 0.0_real64
         
         ! Set diagonal elements to 1
@@ -215,19 +210,11 @@ contains
         real(real64), intent(in) :: diagonal_elements(:)
         integer, intent(in), optional :: precision_kind
         type(value_t) :: value
-        integer :: i, n
         
+        integer :: n, i
         n = size(diagonal_elements)
         
-        value%value_type = VALUE_MATRIX
-        value%precision_kind = real64
-        if (present(precision_kind)) value%precision_kind = precision_kind
-        
-        value%rows = n
-        value%cols = n
-        value%is_complex_matrix = .false.
-        
-        allocate(value%matrix_val(n, n))
+        call setup_matrix_base(value, n, n, precision_kind)
         value%matrix_val = 0.0_real64
         
         ! Set diagonal elements

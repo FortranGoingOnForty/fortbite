@@ -295,6 +295,169 @@ contains
         end select
     end function evaluate_unary_op
     
+    !> Validate function argument count and return error if invalid
+    logical function validate_function_args(node, expected_count, error) result(is_valid)
+        type(ast_node_t), pointer, intent(in) :: node
+        integer, intent(in) :: expected_count
+        type(evaluation_error_t), intent(out) :: error
+        
+        character(len=100) :: error_msg
+        
+        error%has_error = .false.
+        
+        if (node%arg_count /= expected_count) then
+            if (expected_count == 1) then
+                write(error_msg, '(A,A,A)') trim(node%function_name), '() expects 1 argument'
+            else
+                write(error_msg, '(A,A,A,I0,A)') trim(node%function_name), '() expects ', '', expected_count, ' arguments'
+            end if
+            call set_eval_error(error, error_msg)
+            is_valid = .false.
+        else
+            is_valid = .true.
+        end if
+    end function validate_function_args
+    
+    !> Validate matrix dimension arguments (positive integers)
+    logical function validate_matrix_dims(arg1, arg2, func_name, error) result(is_valid)
+        type(value_t), intent(in) :: arg1
+        type(value_t), intent(in), optional :: arg2
+        character(len=*), intent(in) :: func_name
+        type(evaluation_error_t), intent(out) :: error
+        
+        character(len=100) :: error_msg
+        
+        error%has_error = .false.
+        is_valid = .false.
+        
+        ! Check first argument
+        if (arg1%value_type /= VALUE_SCALAR) then
+            write(error_msg, '(A,A)') trim(func_name), '() expects numeric size argument'
+            call set_eval_error(error, error_msg)
+            return
+        end if
+        
+        if (arg1%scalar_val <= 0 .or. arg1%scalar_val /= int(arg1%scalar_val)) then
+            write(error_msg, '(A,A)') trim(func_name), '() size must be a positive integer'
+            call set_eval_error(error, error_msg)
+            return
+        end if
+        
+        ! Check second argument if present
+        if (present(arg2)) then
+            if (arg2%value_type /= VALUE_SCALAR) then
+                write(error_msg, '(A,A)') trim(func_name), '() expects numeric size arguments'
+                call set_eval_error(error, error_msg)
+                return
+            end if
+            
+            if (arg2%scalar_val <= 0 .or. arg2%scalar_val /= int(arg2%scalar_val)) then
+                write(error_msg, '(A,A)') trim(func_name), '() sizes must be positive integers'
+                call set_eval_error(error, error_msg)
+                return
+            end if
+        end if
+        
+        is_valid = .true.
+    end function validate_matrix_dims
+    
+    !> Handle matrix creation functions (zeros, ones, eye)
+    function eval_matrix_creation(func_name, node, args, error) result(value)
+        character(len=*), intent(in) :: func_name
+        type(ast_node_t), pointer, intent(in) :: node
+        type(value_t), intent(in) :: args(:)
+        type(evaluation_error_t), intent(out) :: error
+        type(value_t) :: value
+        
+        integer :: rows, cols
+        character(len=100) :: error_msg
+        
+        select case (trim(func_name))
+        case ('zeros', 'ones')
+            if (node%arg_count == 1) then
+                ! Square matrix
+                if (validate_matrix_dims(args(1), func_name=func_name, error=error)) then
+                    rows = int(args(1)%scalar_val)
+                    if (trim(func_name) == 'zeros') then
+                        value = create_zeros_matrix(rows, rows)
+                    else
+                        value = create_ones_matrix(rows, rows)
+                    end if
+                else
+                    value = create_scalar(0.0_real64)
+                end if
+            else if (node%arg_count == 2) then
+                ! Rectangular matrix
+                if (validate_matrix_dims(args(1), args(2), func_name, error)) then
+                    rows = int(args(1)%scalar_val)
+                    cols = int(args(2)%scalar_val)
+                    if (trim(func_name) == 'zeros') then
+                        value = create_zeros_matrix(rows, cols)
+                    else
+                        value = create_ones_matrix(rows, cols)
+                    end if
+                else
+                    value = create_scalar(0.0_real64)
+                end if
+            else
+                write(error_msg, '(A,A)') trim(func_name), '() expects 1 or 2 arguments'
+                call set_eval_error(error, error_msg)
+                value = create_scalar(0.0_real64)
+            end if
+            
+        case ('eye')
+            if (node%arg_count == 1) then
+                if (validate_matrix_dims(args(1), func_name=func_name, error=error)) then
+                    rows = int(args(1)%scalar_val)
+                    value = create_eye_matrix(rows)
+                else
+                    value = create_scalar(0.0_real64)
+                end if
+            else
+                call set_eval_error(error, 'eye() expects 1 argument')
+                value = create_scalar(0.0_real64)
+            end if
+        end select
+    end function eval_matrix_creation
+    
+    !> Handle single-argument matrix operation functions
+    function eval_matrix_operation(func_name, node, args, error) result(value)
+        character(len=*), intent(in) :: func_name
+        type(ast_node_t), pointer, intent(in) :: node
+        type(value_t), intent(in) :: args(:)
+        type(evaluation_error_t), intent(out) :: error
+        type(value_t) :: value
+        
+        character(len=100) :: error_msg
+        
+        ! Validate single argument
+        if (.not. validate_function_args(node, 1, error)) then
+            value = create_scalar(0.0_real64)
+            return
+        end if
+        
+        ! Validate matrix argument
+        if (args(1)%value_type /= VALUE_MATRIX) then
+            write(error_msg, '(A,A)') trim(func_name), '() expects a matrix argument'
+            call set_eval_error(error, error_msg)
+            value = create_scalar(0.0_real64)
+            return
+        end if
+        
+        ! Dispatch to appropriate function
+        select case (trim(func_name))
+        case ('transpose', 'trans')
+            value = matrix_transpose(args(1))
+        case ('det', 'determinant')
+            value = create_scalar(matrix_determinant(args(1)))
+        case ('inv', 'inverse')
+            value = matrix_inverse(args(1))
+        case default
+            call set_eval_error(error, 'Unknown matrix operation function')
+            value = create_scalar(0.0_real64)
+        end select
+    end function eval_matrix_operation
+    
     !> Evaluate a function call
     recursive function evaluate_function_call(node, context, error) result(value)
         type(ast_node_t), pointer, intent(in) :: node
@@ -326,8 +489,7 @@ contains
         ! Trigonometric functions
         case ('sin', 'cos', 'tan', 'asin', 'arcsin', 'acos', 'arccos', 'atan', 'arctan', &
               'sec', 'csc', 'cot')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -335,8 +497,7 @@ contains
             
         ! Hyperbolic functions  
         case ('sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'sech', 'csch', 'coth')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -344,8 +505,7 @@ contains
             
         ! Logarithmic functions
         case ('log', 'ln', 'log10', 'lg', 'log2')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -353,8 +513,7 @@ contains
             
         ! Exponential functions
         case ('exp', 'exp2', 'exp10', 'expm1')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -362,8 +521,7 @@ contains
             
         ! Statistical functions
         case ('mean', 'average', 'sum', 'std', 'stddev')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -372,8 +530,7 @@ contains
         ! Special functions
         case ('gamma', 'lgamma', 'loggamma', 'factorial', 'fact', 'erf', 'erfc', &
               'ceil', 'ceiling', 'floor', 'round', 'nint', 'frac', 'fraction')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -381,16 +538,14 @@ contains
             
         ! Complex functions
         case ('real', 're', 'imag', 'im', 'conj', 'conjugate', 'arg', 'phase', 'angle', 'cabs', 'modulus')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, trim(node%function_name) // '() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
             value = eval_complex_functions(node%function_name, args(1))
             
         case ('sqrt')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, 'sqrt() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
@@ -408,137 +563,19 @@ contains
             end if
             
         case ('abs')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, 'abs() expects 1 argument')
+            if (.not. validate_function_args(node, 1, error)) then
                 value = create_scalar(0.0_real64)
                 return
             end if
             value = abs_value(args(1))
             
         ! Matrix creation functions
-        case ('zeros')
-            if (node%arg_count == 1) then
-                ! zeros(n) - square matrix
-                if (args(1)%value_type == VALUE_SCALAR) then
-                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val)) then
-                        value = create_zeros_matrix(int(args(1)%scalar_val), int(args(1)%scalar_val))
-                    else
-                        call set_eval_error(error, 'zeros() size must be a positive integer')
-                        value = create_scalar(0.0_real64)
-                    end if
-                else
-                    call set_eval_error(error, 'zeros() expects numeric size argument')
-                    value = create_scalar(0.0_real64)
-                end if
-            else if (node%arg_count == 2) then
-                ! zeros(m,n) - rectangular matrix
-                if (args(1)%value_type == VALUE_SCALAR .and. args(2)%value_type == VALUE_SCALAR) then
-                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val) .and. &
-                        args(2)%scalar_val > 0 .and. args(2)%scalar_val == int(args(2)%scalar_val)) then
-                        value = create_zeros_matrix(int(args(1)%scalar_val), int(args(2)%scalar_val))
-                    else
-                        call set_eval_error(error, 'zeros() sizes must be positive integers')
-                        value = create_scalar(0.0_real64)
-                    end if
-                else
-                    call set_eval_error(error, 'zeros() expects numeric size arguments')
-                    value = create_scalar(0.0_real64)
-                end if
-            else
-                call set_eval_error(error, 'zeros() expects 1 or 2 arguments')
-                value = create_scalar(0.0_real64)
-            end if
-            
-        case ('ones')
-            if (node%arg_count == 1) then
-                ! ones(n) - square matrix
-                if (args(1)%value_type == VALUE_SCALAR) then
-                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val)) then
-                        value = create_ones_matrix(int(args(1)%scalar_val), int(args(1)%scalar_val))
-                    else
-                        call set_eval_error(error, 'ones() size must be a positive integer')
-                        value = create_scalar(0.0_real64)
-                    end if
-                else
-                    call set_eval_error(error, 'ones() expects numeric size argument')
-                    value = create_scalar(0.0_real64)
-                end if
-            else if (node%arg_count == 2) then
-                ! ones(m,n) - rectangular matrix
-                if (args(1)%value_type == VALUE_SCALAR .and. args(2)%value_type == VALUE_SCALAR) then
-                    if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val) .and. &
-                        args(2)%scalar_val > 0 .and. args(2)%scalar_val == int(args(2)%scalar_val)) then
-                        value = create_ones_matrix(int(args(1)%scalar_val), int(args(2)%scalar_val))
-                    else
-                        call set_eval_error(error, 'ones() sizes must be positive integers')
-                        value = create_scalar(0.0_real64)
-                    end if
-                else
-                    call set_eval_error(error, 'ones() expects numeric size arguments')
-                    value = create_scalar(0.0_real64)
-                end if
-            else
-                call set_eval_error(error, 'ones() expects 1 or 2 arguments')
-                value = create_scalar(0.0_real64)
-            end if
-            
-        case ('eye')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, 'eye() expects 1 argument')
-                value = create_scalar(0.0_real64)
-                return
-            end if
-            if (args(1)%value_type == VALUE_SCALAR) then
-                if (args(1)%scalar_val > 0 .and. args(1)%scalar_val == int(args(1)%scalar_val)) then
-                    value = create_eye_matrix(int(args(1)%scalar_val))
-                else
-                    call set_eval_error(error, 'eye() size must be a positive integer')
-                    value = create_scalar(0.0_real64)
-                end if
-            else
-                call set_eval_error(error, 'eye() expects numeric size argument')
-                value = create_scalar(0.0_real64)
-            end if
+        case ('zeros', 'ones', 'eye')
+            value = eval_matrix_creation(node%function_name, node, args, error)
             
         ! Matrix functions
-        case ('transpose', 'trans')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, 'transpose() expects 1 argument')
-                value = create_scalar(0.0_real64)
-                return
-            end if
-            if (args(1)%value_type == VALUE_MATRIX) then
-                value = matrix_transpose(args(1))
-            else
-                call set_eval_error(error, 'transpose() expects a matrix argument')
-                value = create_scalar(0.0_real64)
-            end if
-            
-        case ('det', 'determinant')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, 'det() expects 1 argument')
-                value = create_scalar(0.0_real64)
-                return
-            end if
-            if (args(1)%value_type == VALUE_MATRIX) then
-                value = create_scalar(matrix_determinant(args(1)))
-            else
-                call set_eval_error(error, 'det() expects a matrix argument')
-                value = create_scalar(0.0_real64)
-            end if
-            
-        case ('inv', 'inverse')
-            if (node%arg_count /= 1) then
-                call set_eval_error(error, 'inv() expects 1 argument')
-                value = create_scalar(0.0_real64)
-                return
-            end if
-            if (args(1)%value_type == VALUE_MATRIX) then
-                value = matrix_inverse(args(1))
-            else
-                call set_eval_error(error, 'inv() expects a matrix argument')
-                value = create_scalar(0.0_real64)
-            end if
+        case ('transpose', 'trans', 'det', 'determinant', 'inv', 'inverse')
+            value = eval_matrix_operation(node%function_name, node, args, error)
             
         case ('solve')
             ! Solve linear system Ax = b
