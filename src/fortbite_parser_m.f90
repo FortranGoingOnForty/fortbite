@@ -113,43 +113,43 @@ contains
     end function parse_assignment
     
     !> Parse logical OR expressions (placeholder for future boolean logic)
-    function parse_logical_or(parser) result(node)
+    recursive function parse_logical_or(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
-        
+
         ! For now, just pass through to the next level
         node => parse_logical_and(parser)
     end function parse_logical_or
-    
+
     !> Parse logical AND expressions (placeholder for future boolean logic)
-    function parse_logical_and(parser) result(node)
+    recursive function parse_logical_and(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
-        
+
         ! For now, just pass through to the next level
         node => parse_equality(parser)
     end function parse_logical_and
-    
+
     !> Parse equality expressions (placeholder for future comparisons)
-    function parse_equality(parser) result(node)
+    recursive function parse_equality(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
-        
+
         ! For now, just pass through to the next level
         node => parse_relational(parser)
     end function parse_equality
-    
+
     !> Parse relational expressions (placeholder for future comparisons)
-    function parse_relational(parser) result(node)
+    recursive function parse_relational(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
-        
+
         ! For now, just pass through to the next level
         node => parse_additive(parser)
     end function parse_relational
-    
+
     !> Parse additive expressions (+ and -)
-    function parse_additive(parser) result(node)
+    recursive function parse_additive(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
         
@@ -178,7 +178,7 @@ contains
     end function parse_additive
     
     !> Parse multiplicative expressions (*, /, mod)
-    function parse_multiplicative(parser) result(node)
+    recursive function parse_multiplicative(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
         
@@ -264,7 +264,7 @@ contains
     end function parse_unary
     
     !> Parse postfix expressions (precision specifiers)
-    function parse_postfix(parser) result(node)
+    recursive function parse_postfix(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
         
@@ -287,7 +287,7 @@ contains
     end function parse_postfix
     
     !> Parse primary expressions (literals, identifiers, parentheses, functions)
-    function parse_primary(parser) result(node)
+    recursive function parse_primary(parser) result(node)
         type(parser_state_t), intent(inout) :: parser
         type(ast_node_t), pointer :: node
         

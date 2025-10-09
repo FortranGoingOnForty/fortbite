@@ -1,0 +1,26 @@
+============================================================
+Running Test Suite: Arithmetic Operations
+============================================================
+✓ Addition: 2 + 3 = 5 ... PASSED
+✓ Addition: -5 + 3 = -2 ... PASSED
+✓ Addition: 0.1 + 0.2 ... PASSED
+✓ Subtraction: 10 - 3 = 7 ... PASSED
+✓ Subtraction: -5 - 3 = -8 ... PASSED
+✓ Multiplication: 4 * 5 = 20 ... PASSED
+✓ Multiplication: -3 * 7 = -21 ... PASSED
+✓ Multiplication: -2 * -3 = 6 ... PASSED
+✓ Division: 15 / 3 = 5 ... PASSED
+✓ Division: 7 / 2 = 3.5 ... PASSED
+✓ Division: -12 / 4 = -3 ... PASSED
+✓ Power: 2^3 = 8 ... PASSED
+✓ Power: 5^2 = 25 ... PASSED
+✓ Power: 4^0.5 = 2 ... PASSED
+✓ Power: 10^-1 = 0.1 ... PASSED
+✓ Negation: -(5) = -5 ... PASSED
+✓ Negation: -(-3) = 3 ... PASSED
+✓ Addition with zero: 5 + 0 = 5 ... PASSED
+✓ Multiplication by zero: 5 * 0 = 0 ... PASSED
+✓ Multiplication by one: 7 * 1 = 7 ... PASSED
+------------------------------------------------------------
+Results: 20 passed, 0 failed, 20 total
+============================================================

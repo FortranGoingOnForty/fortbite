@@ -266,10 +266,21 @@ contains
     !> Print a value to standard output
     subroutine print_value(value)
         type(value_t), intent(in) :: value
-        
+        character(len=100) :: fmt_str
+        integer :: precision_digits
+
         select case (value%value_type)
         case (VALUE_SCALAR)
-            write(*, '(G0)') value%scalar_val
+            ! Use precision_kind to determine output format
+            ! If precision_kind < 100, it's the requested precision digits
+            ! Otherwise it's a kind parameter (like real64 = 8)
+            if (value%precision_kind > 0 .and. value%precision_kind < 100) then
+                precision_digits = value%precision_kind
+                write(fmt_str, '(A,I0,A,I0,A)') '(F0.', precision_digits, ')'
+                write(*, fmt_str) value%scalar_val
+            else
+                write(*, '(G0)') value%scalar_val
+            end if
         case (VALUE_COMPLEX)
             if (aimag(value%complex_val) >= 0.0_real64) then
                 write(*, '(G0,"+",G0,"i")') real(value%complex_val), aimag(value%complex_val)

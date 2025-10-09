@@ -56,8 +56,8 @@ $(BUILDDIR)/fortbite_arithmetic_m.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDD
 $(BUILDDIR)/fortbite_ast_m.o: $(BUILDDIR)/fortbite_types_m.o
 $(BUILDDIR)/fortbite_lexer_m.o: $(BUILDDIR)/fortbite_types_m.o
 $(BUILDDIR)/fortbite_parser_m.o: $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_ast_m.o
-$(BUILDDIR)/fortbite_evaluator_m.o: $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_ast_m.o $(BUILDDIR)/fortbite_arithmetic_m.o $(BUILDDIR)/fortbite_functions_m.o
-$(BUILDDIR)/fortbite_io_m.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o
+$(BUILDDIR)/fortbite_evaluator_m.o: $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_ast_m.o $(BUILDDIR)/fortbite_arithmetic_m.o $(BUILDDIR)/fortbite_functions_m.o $(BUILDDIR)/fortbite_matrix_m.o
+$(BUILDDIR)/fortbite_io_m.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_lexer_m.o $(BUILDDIR)/fortbite_parser_m.o $(BUILDDIR)/fortbite_evaluator_m.o $(BUILDDIR)/fortbite_ast_m.o
 $(BUILDDIR)/fortbite.o: $(BUILDDIR)/fortbite_precision_m.o $(BUILDDIR)/fortbite_types_m.o $(BUILDDIR)/fortbite_io_m.o
 
 # Clean up
@@ -72,13 +72,78 @@ run: $(TARGET)
 install: $(TARGET)
 	cp $(TARGET) /usr/local/bin/fortbite
 
+# Test compilation
+TEST_FRAMEWORK = tests/test_framework.f90
+TEST_SOURCES = tests/unit/test_arithmetic.f90 \
+               tests/unit/test_functions.f90 \
+               tests/integration/test_expressions.f90
+
+TEST_OBJECTS = $(TEST_SOURCES:tests/%.f90=$(BUILDDIR)/tests/%.o) \
+               $(BUILDDIR)/tests/test_framework.o
+
+TEST_EXECUTABLES = $(TEST_SOURCES:tests/%.f90=$(BUILDDIR)/tests/%)
+
+# Build test framework
+$(BUILDDIR)/tests/test_framework.o: $(TEST_FRAMEWORK) directories
+	@mkdir -p $(BUILDDIR)/tests/unit $(BUILDDIR)/tests/integration
+	$(FC) $(FFLAGS) -J$(MODDIR) -c $< -o $@
+
+# Library objects (all except main program)
+LIB_OBJECTS = $(filter-out $(BUILDDIR)/fortbite.o, $(OBJECTS))
+
+# Build test executables
+$(BUILDDIR)/tests/unit/%.o: tests/unit/%.f90 $(BUILDDIR)/tests/test_framework.o $(LIB_OBJECTS)
+	$(FC) $(FFLAGS) -J$(MODDIR) -I$(MODDIR) -c $< -o $@
+
+$(BUILDDIR)/tests/integration/%.o: tests/integration/%.f90 $(BUILDDIR)/tests/test_framework.o $(LIB_OBJECTS)
+	$(FC) $(FFLAGS) -J$(MODDIR) -I$(MODDIR) -c $< -o $@
+
+$(BUILDDIR)/tests/unit/%: $(BUILDDIR)/tests/unit/%.o $(BUILDDIR)/tests/test_framework.o $(LIB_OBJECTS)
+	$(FC) $(LDFLAGS) -J$(MODDIR) -o $@ $^
+
+$(BUILDDIR)/tests/integration/%: $(BUILDDIR)/tests/integration/%.o $(BUILDDIR)/tests/test_framework.o $(LIB_OBJECTS)
+	$(FC) $(LDFLAGS) -J$(MODDIR) -o $@ $^
+
+# Test targets
+test-build: directories $(TARGET) $(TEST_EXECUTABLES)
+	@echo "Test build complete!"
+
+test: test-build
+	@./tests/run_tests.sh --no-build
+
+test-unit: test-build
+	@echo "Running unit tests..."
+	@$(BUILDDIR)/tests/unit/test_arithmetic || true
+	@$(BUILDDIR)/tests/unit/test_functions || true
+
+test-integration: test-build
+	@echo "Running integration tests..."
+	@$(BUILDDIR)/tests/integration/test_expressions || true
+
+test-verbose: test-build
+	@for test in $(TEST_EXECUTABLES); do \
+		echo "=== Running $$test ==="; \
+		$$test || true; \
+		echo; \
+	done
+
+# Clean including tests
+clean-all: clean
+	rm -rf test_results
+
 # Help
 help:
 	@echo "FORTBITE Makefile targets:"
-	@echo "  all      - Build the executable (default)"
-	@echo "  clean    - Remove build files"
-	@echo "  run      - Build and run FORTBITE"
-	@echo "  install  - Install to /usr/local/bin"
-	@echo "  help     - Show this help message"
+	@echo "  all           - Build the executable (default)"
+	@echo "  clean         - Remove build files"
+	@echo "  clean-all     - Remove build files and test results"
+	@echo "  run           - Build and run FORTBITE"
+	@echo "  install       - Install to /usr/local/bin"
+	@echo "  test          - Run all tests"
+	@echo "  test-unit     - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  test-verbose  - Run all tests with full output"
+	@echo "  test-build    - Build test executables only"
+	@echo "  help          - Show this help message"
 
-.PHONY: all clean run install help directories
+.PHONY: all clean clean-all run install help directories test test-unit test-integration test-verbose test-build

@@ -654,21 +654,21 @@ contains
         type(evaluation_context_t), intent(inout) :: context
         type(evaluation_error_t), intent(out) :: error
         type(value_t) :: value
-        
+
         type(evaluation_error_t) :: expr_error
-        
+
         error%has_error = .false.
-        
-        ! For now, just evaluate the expression (ignore precision specification)
-        ! TODO: Implement actual precision control in Phase 3
+
+        ! Evaluate the expression
         value = evaluate_expression(node%expression, context, expr_error)
         if (expr_error%has_error) then
             error = expr_error
             return
         end if
-        
-        ! Could modify precision here based on node%precision_digits
-        ! For now, just return the value as-is
+
+        ! Store the requested precision in the value
+        ! We'll use the precision_kind field to store the number of digits
+        value%precision_kind = node%precision_digits
     end function evaluate_precision_spec
     
     !> Evaluate a matrix literal
